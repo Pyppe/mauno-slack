@@ -1,0 +1,5 @@
+target/
+/dev-sbt.sh
+mauno.conf
+/logs/
+
