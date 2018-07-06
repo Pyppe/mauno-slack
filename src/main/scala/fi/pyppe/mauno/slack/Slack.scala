@@ -7,8 +7,8 @@ import org.joda.time.DateTime
 import scala.concurrent.{ExecutionContext, Future}
 import slack.SlackUtil
 import slack.api.SlackApiClient
-import slack.models.MessageSubtypes.FileShareMessage
-import slack.models.{Message, MessageWithSubtype, User, UserTyping}
+import slack.models.MessageSubtypes.{FileShareMessage, MeMessage}
+import slack.models.{Hello, Message, MessageWithSubtype, User, UserTyping}
 import slack.rtm.SlackRtmClient
 
 object Slack extends LoggerSupport {
@@ -46,26 +46,33 @@ object Slack extends LoggerSupport {
         } else {
           logger.debug(s"MESSAGE FROM SLACK: $msg")
           if (msg.channel == GeneralChannelId) {
-            Users.findUserById(msg.user).map { user =>
-              val text = unescapeHtml(msg.text)
-              if (user.id == ProxyUserId) {
-                text match {
-                  case ProxiedMessage(nick, text) =>
-                    indexMessage(Some(nick), text, false)
-                  case _ =>
-                    logger.warn(s"Unexpected proxy message: ${msg.text}")
-                }
-              } else {
-                indexMessage(Some(user.name), text, true)
-              }
-            }
+            handleTextualMessageToGeneral(msg.user, msg.text)
           }
         }
       case _: UserTyping => ()
+      case _: Hello => ()
       case e: MessageWithSubtype if e.messageSubType.isInstanceOf[FileShareMessage] && e.channel == GeneralChannelId =>
         handleFileUpload(e.messageSubType.asInstanceOf[FileShareMessage])
+      case e: MessageWithSubtype if e.messageSubType.isInstanceOf[MeMessage] && e.channel == GeneralChannelId =>
+        handleTextualMessageToGeneral(e.user, e.text)
       case e =>
         logger.debug(s"Got event: $e")
+    }
+  }
+
+  private def handleTextualMessageToGeneral(userId: String, originalText: String) = {
+    Users.findUserById(userId).map { user =>
+      val text = unescapeHtml(originalText)
+      if (user.id == ProxyUserId) {
+        text match {
+          case ProxiedMessage(nick, text) =>
+            indexMessage(Some(nick), text, false)
+          case _ =>
+            logger.warn(s"Unexpected proxy message: $originalText")
+        }
+      } else {
+        indexMessage(Some(user.name), text, true)
+      }
     }
   }
 
