@@ -6,7 +6,10 @@ object Config {
 
   private val conf = ConfigFactory.load("mauno.conf")
 
-  def imakesHost: String = conf.getString("imakes.host")
+  val botName = "maunomies"
+
+  def elasticHost = conf.getString("elastic.host")
+  def imakesHost = conf.getString("imakes.host")
   def slackBotToken = conf.getString("slack.bot.token")
   def slackUserToken = conf.getString("slack.user.token")
 

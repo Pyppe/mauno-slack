@@ -2,6 +2,7 @@ package fi.pyppe.mauno.slack
 
 import akka.actor.ActorSystem
 import com.softwaremill.sttp.asynchttpclient.future.AsyncHttpClientFutureBackend
+import fi.pyppe.mauno.slack.Utils.unescapeHtml
 import org.joda.time.DateTime
 import scala.concurrent.{ExecutionContext, Future}
 import slack.SlackUtil
@@ -20,6 +21,8 @@ object Slack extends LoggerSupport {
   val ProxyUserId = "UAY6VSAE8" // Manolito
 
   private val SayCommand = """!say +(.+)""".r
+  private val UserIdPattern = s"""<@(\\w+)>""".r
+  private val ProxiedMessage = s"""<(\\S+)> *(.*)""".r
 
   implicit val system = ActorSystem("slack")
   implicit val ec = system.dispatcher
@@ -34,8 +37,9 @@ object Slack extends LoggerSupport {
         if (SlackUtil.isDirectMsg(msg)) {
           msg.text match {
             case SayCommand(say) if say.trim.nonEmpty =>
-              rtmClient.sendMessage(GeneralChannelId, say)
-              passMessageToIrcAndIndex(None, say, true)
+              val text = unescapeHtml(say)
+              rtmClient.sendMessage(GeneralChannelId, text)
+              indexMessage(None, text, true)
             case _ =>
               // Do nothing for now
           }
@@ -43,7 +47,17 @@ object Slack extends LoggerSupport {
           logger.debug(s"MESSAGE FROM SLACK: $msg")
           if (msg.channel == GeneralChannelId) {
             Users.findUserById(msg.user).map { user =>
-              passMessageToIrcAndIndex(Some(user.name), msg.text, true)
+              val text = unescapeHtml(msg.text)
+              if (user.id == ProxyUserId) {
+                text match {
+                  case ProxiedMessage(nick, text) =>
+                    indexMessage(Some(nick), text, false)
+                  case _ =>
+                    logger.warn(s"Unexpected proxy message: ${msg.text}")
+                }
+              } else {
+                indexMessage(Some(user.name), text, true)
+              }
             }
           }
         }
@@ -51,33 +65,55 @@ object Slack extends LoggerSupport {
       case e: MessageWithSubtype if e.messageSubType.isInstanceOf[FileShareMessage] && e.channel == GeneralChannelId =>
         handleFileUpload(e.messageSubType.asInstanceOf[FileShareMessage])
       case e =>
-        logger.debug(s"Non-message: $e")
+        logger.debug(s"Got event: $e")
     }
   }
 
   private def handleFileUpload(msg: FileShareMessage) = {
     Users.findUserById(msg.file.user).foreach { user =>
-      val title = msg.file.title
+      val title = unescapeHtml(msg.file.title)
       val commentSuffix = msg.file.initial_comment match {
-        case Some(comment) => s"[${comment.comment}]"
+        case Some(comment) => s"[${unescapeHtml(comment.comment)}]"
         case None => ""
       }
 
       SlackHTTP.makeFilePublic(msg.file.id).foreach { fileUrl =>
-        /*
-        passMessageToIrcAndIndex(
-          None,
-          s"OHOI! ${user.name} lisäsi kuvan $fileUrl $title $commentSuffix".trim,
-          false
-        )
-        */
-        sayInGeneralChannel(s"OHOI! ${user.name} lisäsi kuvan $fileUrl $title $commentSuffix".trim)
+        val text = s"OHOI! ${user.name} lisäsi kuvan $fileUrl $title $commentSuffix".trim
+        sayInGeneralChannel(text)
+        indexMessage(None, text, true)
       }
     }
   }
 
-  private def passMessageToIrcAndIndex(nickname: Option[String], text: String, replaceUserIds: Boolean) = {
+  private def indexMessage(nickname: Option[String], text: String, replaceUserIds: Boolean): Future[Unit] = {
 
+    def index(text: String) = {
+      Elastic.save(
+        IndexedMessage.create(
+          nickname getOrElse Config.botName,
+          text
+        )
+      )
+    }
+
+    if (replaceUserIds) {
+      val userIds = UserIdPattern.findAllMatchIn(text).map(_.group(1)).toSet
+
+      if (userIds.nonEmpty) {
+        Future.traverse(userIds)(Users.findUserById).flatMap { users =>
+          val usersById = users.groupBy(_.id).mapValues(_.head)
+          index(
+            UserIdPattern.replaceAllIn(text, m => {
+              usersById.get(m.group(1)).map { user =>
+                s"@${user.name}"
+              } getOrElse m.group(0)
+            })
+          )
+        }
+      } else {
+        index(text)
+      }
+    } else index(text)
   }
 
   def sayInGeneralChannel(text: String): Future[Long] = rtmClient.sendMessage(GeneralChannelId, text)

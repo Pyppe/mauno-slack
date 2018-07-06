@@ -57,7 +57,7 @@ object ImakesRssChecker extends LoggerSupport {
           }
         }
         entries.headOption.foreach { latest =>
-          logger.debug(s"Latest entry: $latest")
+          //logger.debug(s"Latest entry: $latest")
           latestId = Some(latest.id)
         }
       }

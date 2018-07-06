@@ -3,6 +3,7 @@ package fi.pyppe.mauno.slack
 import com.softwaremill.sttp.asynchttpclient.future.AsyncHttpClientFutureBackend
 import java.time.Duration
 import java.util.concurrent.{Executors, ScheduledFuture, TimeUnit}
+import org.apache.commons.text.StringEscapeUtils
 import scala.util.Random
 
 object Utils extends LoggerSupport {
@@ -35,6 +36,6 @@ object Utils extends LoggerSupport {
     executor.scheduleAtFixedRate(task, firstDelay, interval.toMillis, TimeUnit.MILLISECONDS)
   }
 
-
+  def unescapeHtml(text: String) = StringEscapeUtils.unescapeHtml4(text)
 
 }

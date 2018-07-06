@@ -28,7 +28,10 @@ libraryDependencies ++= Seq(
   "com.github.gilbertw1"       %% "slack-scala-client" % "0.2.3",
 
   // XML (for RSS parsing)
-  "org.scala-lang.modules"     %% "scala-xml" % "1.1.0"
+  "org.scala-lang.modules"     %% "scala-xml" % "1.1.0",
+
+  // Misc
+  "org.apache.commons"         % "commons-text" % "1.4"
 
 )
 
