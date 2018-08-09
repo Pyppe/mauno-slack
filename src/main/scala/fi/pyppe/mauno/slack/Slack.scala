@@ -3,12 +3,13 @@ package fi.pyppe.mauno.slack
 import akka.actor.ActorSystem
 import com.softwaremill.sttp.asynchttpclient.future.AsyncHttpClientFutureBackend
 import fi.pyppe.mauno.slack.Utils.unescapeHtml
+import io.circe.Json
 import org.joda.time.DateTime
 import scala.concurrent.{ExecutionContext, Future}
 import slack.SlackUtil
 import slack.api.SlackApiClient
 import slack.models.MessageSubtypes.{FileShareMessage, MeMessage}
-import slack.models.{Hello, Message, MessageWithSubtype, User, UserTyping}
+import slack.models.{FileShared, Hello, Message, MessageWithSubtype, User, UserTyping}
 import slack.rtm.SlackRtmClient
 
 object Slack extends LoggerSupport {
@@ -51,8 +52,12 @@ object Slack extends LoggerSupport {
         }
       case _: UserTyping => ()
       case _: Hello => ()
+      /*
       case e: MessageWithSubtype if e.messageSubType.isInstanceOf[FileShareMessage] && e.channel == GeneralChannelId =>
         handleFileUpload(e.messageSubType.asInstanceOf[FileShareMessage])
+      */
+      case FileShared(id) =>
+        handleFileUpload(id)
       case e: MessageWithSubtype if e.messageSubType.isInstanceOf[MeMessage] && e.channel == GeneralChannelId =>
         handleTextualMessageToGeneral(e.user, e.text)
       case e =>
@@ -76,19 +81,20 @@ object Slack extends LoggerSupport {
     }
   }
 
-  private def handleFileUpload(msg: FileShareMessage) = {
-    Users.findUserById(msg.file.user).foreach { user =>
-      val title = unescapeHtml(msg.file.title)
-      val commentSuffix = msg.file.initial_comment match {
-        case Some(comment) => s"[${unescapeHtml(comment.comment)}]"
+  private def handleFileUpload(fileId: String) = {
+    for {
+      fileInfo <- SlackHTTP.makeFilePublic(fileId)
+      user <- Users.findUserById(fileInfo.userId)
+    } yield {
+      val title = unescapeHtml(fileInfo.title)
+      val commentSuffix = fileInfo.comment match {
+        case Some(comment) => s"[${unescapeHtml(comment)}]"
         case None => ""
       }
 
-      SlackHTTP.makeFilePublic(msg.file.id).foreach { fileUrl =>
-        val text = s"OHOI! ${user.name} lisäsi kuvan $fileUrl $title $commentSuffix".trim
-        sayInGeneralChannel(text)
-        indexMessage(None, text, true)
-      }
+      val text = s"OHOI! ${user.name} lisäsi kuvan ${fileInfo.permalinkPublic} $title $commentSuffix".trim
+      sayInGeneralChannel(text)
+      indexMessage(None, text, true)
     }
   }
 
@@ -193,21 +199,57 @@ object SlackHTTP extends LoggerSupport {
   implicit val backend = AsyncHttpClientFutureBackend()
   val userToken = Config.slackUserToken
 
+  case class FileInfo(id: String, title: String, comment: Option[String], permalinkPublic: String, userId: String)
+
   // https://api.slack.com/methods/files.sharedPublicURL
-  def makeFilePublic(fileId: String)(implicit ec: ExecutionContext): Future[String] = {
+  def makeFilePublic(fileId: String)(implicit ec: ExecutionContext): Future[FileInfo] = {
     val async = sttp.get(uri"https://slack.com/api/files.sharedPublicURL?token=$userToken&file=$fileId").send.map { res =>
       import io.circe.parser._
 
       parse(res.unsafeBody).fold(
         err => throw new Exception(s"No json: $err"),
-        js => js.hcursor.downField("file").downField("permalink_public").as[String].getOrElse {
-          throw new Exception(s"Unexpected json: $js")
-        }
+        js => parseFileResponse(js).right.get
       )
     }
 
     async.failed.foreach { err =>
       logger.error(s"Error in makeFilePublic($fileId): $err")
+    }
+
+    async
+  }
+
+  private def parseFileResponse(js: Json) = {
+    val file = js.hcursor.downField("file")
+
+    for {
+      id <- file.downField("id").as[String]
+      title <- file.downField("title").as[String]
+      link <- file.downField("permalink_public").as[String]
+      userId <- file.downField("user").as[String]
+    } yield {
+      FileInfo(
+        id,
+        title,
+        Option(
+          file.downField("initial_comment").downField("comment").as[String].getOrElse("")
+        ).filter(_.nonEmpty),
+        link,
+        userId
+      )
+    }
+  }
+
+  // https://api.slack.com/methods/files.info
+  def fileInfo(fileId: String)(implicit ec: ExecutionContext): Future[FileInfo] = {
+    val async = sttp.get(uri"https://slack.com/api/files.info?token=$userToken&file=$fileId").send.map { res =>
+      import io.circe.parser._
+
+      parseFileResponse(parse(res.unsafeBody).right.get).right.get
+    }
+
+    async.failed.foreach { err =>
+      logger.error(s"Error in fileInfo($fileId): $err")
     }
 
     async
@@ -219,11 +261,12 @@ object SlackHTTP extends LoggerSupport {
     import scala.concurrent.ExecutionContext.Implicits.global
 
     val res = Await.result(
-      makeFilePublic("FAVTYLD6K"),
+      fileInfo("FAVTYLD6K"),
       10.seconds
     )
 
     println(res)
+
   }
 
 }
