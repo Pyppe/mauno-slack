@@ -33,7 +33,9 @@ object Utils extends LoggerSupport {
 
     val firstDelay = 500L + Random.nextInt(2000)
 
-    executor.scheduleAtFixedRate(task, firstDelay, interval.toMillis, TimeUnit.MILLISECONDS)
+    val scheduler = executor.scheduleAtFixedRate(task, firstDelay, interval.toMillis, TimeUnit.MILLISECONDS)
+    logger.info(s"Scheduler started: $name")
+    scheduler
   }
 
   def unescapeHtml(text: String) = StringEscapeUtils.unescapeHtml4(text)

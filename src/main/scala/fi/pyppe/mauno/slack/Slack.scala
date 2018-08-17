@@ -63,6 +63,8 @@ object Slack extends LoggerSupport {
       case e =>
         logger.debug(s"Got event: $e")
     }
+
+    logger.info("Slack registered")
   }
 
   private def handleTextualMessageToGeneral(userId: String, originalText: String) = {
