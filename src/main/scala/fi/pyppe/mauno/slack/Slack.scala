@@ -23,7 +23,7 @@ object Slack extends LoggerSupport {
 
   private val SayCommand = """!say +(.+)""".r
   private val UserIdPattern = s"""<@(\\w+)>""".r
-  private val ProxiedMessage = s"""<(\\S+)> *(.*)""".r
+  private val ProxiedMessage = s"""[*]?<(\\S+)>[*]? *(.*)""".r
 
   implicit val system = ActorSystem("slack")
   implicit val ec = system.dispatcher
