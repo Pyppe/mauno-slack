@@ -14,24 +14,24 @@ assemblyJarName in assembly := "mauno-slack.jar"
 libraryDependencies ++= Seq(
   // Logging
   "ch.qos.logback"             %  "logback-classic" % "1.2.3",
-  "com.typesafe.scala-logging" %% "scala-logging" % "3.9.0",
+  "com.typesafe.scala-logging" %% "scala-logging"   % "3.9.2",
 
   // HTTP
-  "com.softwaremill.sttp"      %% "core" % "1.2.1",
-  "com.softwaremill.sttp"      %% "async-http-client-backend-future" % "1.2.1",
-  "com.softwaremill.sttp"      %% "circe" % "1.2.1",
+  "com.softwaremill.sttp" %% "core" % "1.2.1",
+  "com.softwaremill.sttp" %% "async-http-client-backend-future" % "1.2.1",
+  "com.softwaremill.sttp" %% "circe" % "1.2.1",
 
   // Akka logging
-  "com.typesafe.akka"          %% "akka-slf4j" % "2.4.20",
+  "com.typesafe.akka" %% "akka-slf4j" % "2.5.32",
 
   // Slack
-  "com.github.gilbertw1"       %% "slack-scala-client" % "0.2.3",
+  "com.github.slack-scala-client" %% "slack-scala-client" % "0.2.12",
 
   // XML (for RSS parsing)
-  "org.scala-lang.modules"     %% "scala-xml" % "1.1.0",
+  "org.scala-lang.modules" %% "scala-xml" % "1.1.0",
 
   // Misc
-  "org.apache.commons"         % "commons-text" % "1.4"
+  "org.apache.commons"         % "commons-text" % "1.9"
 
 )
 
