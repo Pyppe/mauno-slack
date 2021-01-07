@@ -39,7 +39,7 @@ object Slack extends LoggerSupport {
           msg.text match {
             case SayCommand(say) if say.trim.nonEmpty =>
               val text = unescapeHtml(say)
-              rtmClient.sendMessage(GeneralChannelId, text)
+              sayInGeneralChannel(text)
               indexMessage(None, text, true)
             case _ =>
               // Do nothing for now
@@ -95,7 +95,7 @@ object Slack extends LoggerSupport {
       }
 
       val text = s"OHOI! ${user.name} lisäsi kuvan ${fileInfo.permalinkPublic} $title $commentSuffix".trim
-      sayInGeneralChannel(text)
+      sayInGeneralChannel(text, true)
       indexMessage(None, text, true)
     }
   }
@@ -131,7 +131,10 @@ object Slack extends LoggerSupport {
     } else index(text)
   }
 
-  def sayInGeneralChannel(text: String): Future[Long] = rtmClient.sendMessage(GeneralChannelId, text)
+  def sayInGeneralChannel(text: String, preventLinkExpansion: Boolean = false): Future[Long] = {
+    val unfurl = if (preventLinkExpansion) Some(false) else None
+    rtmClient.sendMessage(GeneralChannelId, text, unfurl_links = unfurl, unfurl_media = unfurl)
+  }
 
   object Users {
     private var t = DateTime.now.minusHours(1)

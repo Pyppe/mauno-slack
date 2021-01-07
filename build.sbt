@@ -25,7 +25,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-slf4j" % "2.5.32",
 
   // Slack
-  "com.github.slack-scala-client" %% "slack-scala-client" % "0.2.12",
+  "com.github.slack-scala-client" %% "slack-scala-client" % "0.2.13",
 
   // XML (for RSS parsing)
   "org.scala-lang.modules" %% "scala-xml" % "1.1.0",
