@@ -4,7 +4,9 @@ import akka.actor.ActorSystem
 import com.softwaremill.sttp.asynchttpclient.future.AsyncHttpClientFutureBackend
 import fi.pyppe.mauno.slack.Utils.unescapeHtml
 import io.circe.Json
+import io.circe.syntax.StringOps
 import org.joda.time.DateTime
+
 import scala.concurrent.{ExecutionContext, Future}
 import slack.SlackUtil
 import slack.api.SlackApiClient
@@ -95,7 +97,12 @@ object Slack extends LoggerSupport {
       }
 
       val text = s"OHOI! ${user.name} lisäsi kuvan ${fileInfo.permalinkPublic} $title $commentSuffix".trim
-      sayInGeneralChannel(text, true)
+      apiClient.postChatMessage(
+        GeneralChannelId,
+        text,
+        unfurlLinks = Some(false),
+        unfurlMedia = Some(false)
+      )
       indexMessage(None, text, true)
     }
   }
@@ -131,10 +138,8 @@ object Slack extends LoggerSupport {
     } else index(text)
   }
 
-  def sayInGeneralChannel(text: String, preventLinkExpansion: Boolean = false): Future[Long] = {
-    val unfurl = if (preventLinkExpansion) Some(false) else None
-    rtmClient.sendMessage(GeneralChannelId, text, unfurl_links = unfurl, unfurl_media = unfurl)
-  }
+  def sayInGeneralChannel(text: String): Future[Long] =
+    rtmClient.sendMessage(GeneralChannelId, text)
 
   object Users {
     private var t = DateTime.now.minusHours(1)
@@ -265,12 +270,16 @@ object SlackHTTP extends LoggerSupport {
     import scala.concurrent.duration._
     import scala.concurrent.ExecutionContext.Implicits.global
 
-    val res = Await.result(
-      fileInfo("FAVTYLD6K"),
-      10.seconds
-    )
+    try {
+      val res = Await.result(
+        fileInfo("FAVTYLD6K"),
+        10.seconds
+      )
 
-    println(res)
+      println(res)
+    } finally {
+      backend.close()
+    }
 
   }
 
