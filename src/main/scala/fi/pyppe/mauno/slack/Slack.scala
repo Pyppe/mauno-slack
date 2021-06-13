@@ -10,8 +10,7 @@ import org.joda.time.DateTime
 import scala.concurrent.{ExecutionContext, Future}
 import slack.SlackUtil
 import slack.api.SlackApiClient
-import slack.models.MessageSubtypes.{FileShareMessage, MeMessage}
-import slack.models.{FileShared, Hello, Message, MessageWithSubtype, User, UserTyping}
+import slack.models.{FileShared, Hello, Message, User, UserTyping}
 import slack.rtm.SlackRtmClient
 
 object Slack extends LoggerSupport {
@@ -37,6 +36,9 @@ object Slack extends LoggerSupport {
   def registerSlackGateway() = {
     rtmClient.onEvent {
       case msg: Message =>
+        msg.bot_id.foreach { botId =>
+          logger.debug(s"BOT_ID: $botId")
+        }
         if (SlackUtil.isDirectMsg(msg)) {
           msg.text match {
             case SayCommand(say) if say.trim.nonEmpty =>
@@ -60,8 +62,9 @@ object Slack extends LoggerSupport {
       */
       case FileShared(id) =>
         handleFileUpload(id)
+        /*
       case e: MessageWithSubtype if e.messageSubType.isInstanceOf[MeMessage] && e.channel == GeneralChannelId =>
-        handleTextualMessageToGeneral(e.user, e.text)
+        handleTextualMessageToGeneral(e.user, e.text)*/
       case e =>
         logger.debug(s"Got event: $e")
     }
